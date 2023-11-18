@@ -1,0 +1,90 @@
+---
+title: "Simple A/B Test with Visualization"
+output: word_document
+date: "2023-11-15"
+---
+
+### *I use this project to demonstrate my ability to conduct A/B analyses. For our purposes, I simulate data that represents collected watch time from two different advertisements, shown to 100 viewers each. I conduct an analysis using a Welch's T-test to determine whether one ad may lead to increased watch time than the other.*
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Simulating data
+### In simulating the data, I create two vectors with 100 data points each, generated from different normal distributions. I chose to simulate with an exponential distribution because I imagine the dropoff of viewers at the beginning of an ad would be greater than towards the end, so a normal distribution might not be the best fit.
+```{r}
+# Set seed for reproducibility
+set.seed(0)
+
+# Simulate watch times using an exponential distribution
+rate_A <- 1/6  # Rate parameter for Ad A
+rate_B <- 1/10  # Rate parameter for Ad B
+
+watch_times_A <- rexp(100, rate_A) 
+watch_times_B <- rexp(100, rate_B) 
+
+```
+
+
+
+# Visualizing
+### I start by visualizing the data (using a density plot) to make sure it looks as expected, and plot the means and their 95% confidence intervals. A histogram could have also been used. For our purposes I think a density plot is prettier haha.
+
+```{r}
+# Load necessary library
+library(ggplot2)
+
+# Combine the data into a data frame and label them
+watch_times_df <- data.frame(
+  Time = c(watch_times_A, watch_times_B),
+  Ad = factor(c(rep("A", length(watch_times_A)), rep("B", length(watch_times_B))))
+)
+
+# Calculate the means and standard errors for each ad
+mean_watch_time_A <- mean(watch_times_A)
+mean_watch_time_B <- mean(watch_times_B)
+se_watch_time_A <- sd(watch_times_A) / sqrt(length(watch_times_A))
+se_watch_time_B <- sd(watch_times_B) / sqrt(length(watch_times_B))
+
+# Calculate the 95% confidence intervals
+ci_watch_time_A <- c(mean_watch_time_A - 1.96 * se_watch_time_A, mean_watch_time_A + 1.96 * se_watch_time_A)
+ci_watch_time_B <- c(mean_watch_time_B - 1.96 * se_watch_time_B, mean_watch_time_B + 1.96 * se_watch_time_B)
+
+# Set colors
+color_A <- "#008080"
+color_B <- "#FF7F50"
+
+# Plot
+ggplot(watch_times_df, aes(x = Time, fill = Ad)) +
+  geom_density(alpha = 0.5) +
+  geom_vline(xintercept = mean_watch_time_A, color = "blue", linetype = "dashed", linewidth = 0.5) +
+  geom_vline(xintercept = mean_watch_time_B, color = "red", linetype = "dashed", linewidth = 0.5) +
+  annotate("rect", xmin = ci_watch_time_A[1], xmax = ci_watch_time_A[2], ymin = -Inf, ymax = Inf, alpha = 0.2, fill = color_A) +
+  annotate("rect", xmin = ci_watch_time_B[1], xmax = ci_watch_time_B[2], ymin = -Inf, ymax = Inf, alpha = 0.2, fill = color_B) +
+  scale_fill_manual(name = "Ad Version", values = c(color_A, color_B)) +
+  labs(title = "Density Plot of Watch Times for Two Ads",
+       subtitle = "Vertical lines and strips represent the mean and 95% CI",
+       x = "Watch Time (seconds)",
+       y = "Density") +
+  theme_minimal()
+
+```
+### On first impression alone, the means look to be different, given how their standard deviations do not overlap. The distributions are clearly not normal, so some caution should be taken when conducting the analysis. 
+
+# T-Test
+### I chose to conduct a t-test to determine which mean is higher. A typical t-test (Student's) assumes the data are normally distributed, independent, and of equal variance. The data is independent, but not normally distributed and have difference variances. Since there are many data points for each ad, (n=100>>30), because of the Central Limit Theorem, the results of this t-test should still be reliable. Since the variance looks different as well, I elect to use a Welch's T-test rather than a standard T-test, because it is designed to handle that difference (and the test does not lose much power in doing so!).
+
+### I am testing whether the ads have the same or different watch times. The null hypothesis is that they are the same, and I will be testing with alpha=0.05.
+```{r}
+
+# Perform a t-test
+t_test_result <- t.test(watch_times_A, watch_times_B, var.equal = FALSE)
+
+# Output the result
+t_test_result
+
+```
+
+# Conclusion
+### The p-value being much less than 0.05 (0.000623) confirms our visual suspicion that the means are different. We have significant evidence to claim that ad B is associated with higher watch time and should be the advertisement chosen. 
